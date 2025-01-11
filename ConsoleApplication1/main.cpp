@@ -43,20 +43,27 @@ void resetBall(SDL_Rect& ball, int& ballVelX, int& ballVelY) {
 
 // 渲染文本
 void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y) {
-    SDL_Color textColor = { 255, 255, 255 }; // 白色
+    SDL_Color textColor = { 255, 255, 255 };
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
-    if (textSurface == nullptr) {
+    if (!textSurface) {
         std::cerr << "Unable to create text surface! SDL_ttf Error: " << TTF_GetError() << std::endl;
         return;
     }
 
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    SDL_FreeSurface(textSurface);  // 渲染后释放表面
+    if (!textTexture) {
+        std::cerr << "Unable to create text texture! SDL Error: " << SDL_GetError() << std::endl;
+        SDL_FreeSurface(textSurface);
+        return;
+    }
 
     SDL_Rect textRect = { x, y, textSurface->w, textSurface->h };
-    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);  // 渲染文本纹理
-    SDL_DestroyTexture(textTexture);  // 渲染后销毁纹理
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+
+    SDL_FreeSurface(textSurface);
+    SDL_DestroyTexture(textTexture);  // 每次渲染后释放纹理
 }
+
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
@@ -141,12 +148,12 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // 在每一帧开始之前清除背景
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        // 在每帧开始之前清空屏幕
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);  // 设置背景颜色为黑色
         SDL_RenderClear(renderer);
 
         // 绘制挡板
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);  // 白色挡板
         SDL_RenderFillRect(renderer, &paddle);
 
         // 绘制球
@@ -155,25 +162,30 @@ int main(int argc, char* argv[]) {
         // 绘制砖块
         for (const auto& brick : bricks) {
             if (!brick.isDestroyed) {
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // 红色砖块
                 SDL_RenderFillRect(renderer, &brick.rect);
             }
         }
 
         // 渲染分数和生命值
-        renderText(renderer, font, "Score: " + std::to_string(score) + "  Lives: " + std::to_string(lives), 10, 10);
+        std::string scoreText = "Score: " + std::to_string(score) + "  Lives: " + std::to_string(lives);
+        renderText(renderer, font, scoreText, 10, 10);
 
         // 刷新渲染
         SDL_RenderPresent(renderer);
+
 
         // 添加延迟以控制帧率
         SDL_Delay(10); // 约60 FPS
     }
 
     // 游戏结束，显示最终得分
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色背景
+    SDL_RenderClear(renderer);
     renderText(renderer, font, "Game Over! Your score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
     SDL_RenderPresent(renderer);
-    SDL_Delay(3000); // 显示 3 秒钟
+    SDL_Delay(3000); // 显示3秒
+
 
     // 清理
     TTF_CloseFont(font);  // 关闭字体
