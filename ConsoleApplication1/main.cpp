@@ -1,5 +1,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <SDL_mixer.h>  // 添加音效
+#include <SDL_image.h>
 #include <vector>
 #include <iostream>
 #include <string>
@@ -88,14 +90,42 @@ bool allBricksDestroyed(const std::vector<Brick>& bricks) {
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();  // 初始化 SDL_ttf 库
+    Mix_Init(MIX_INIT_MP3); // 初始化音频
+    Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096);  // 初始化音频设备
 
+    // 创建窗口
     SDL_Window* window = SDL_CreateWindow("Breakout Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    // 加载图标
+    SDL_Surface* icon = IMG_Load("./Content/icon.png");  // 使用 SDL_image 加载图标
+    if (!icon) {
+        std::cerr << "Failed to load icon: " << IMG_GetError() << std::endl;
+        return -1;
+    }
+
+    // 设置窗口图标
+    SDL_SetWindowIcon(window, icon);
+
+    // 释放图标资源
+    SDL_FreeSurface(icon);
+
 
     // 加载字体
     TTF_Font* font = TTF_OpenFont("C:/Windows/Fonts/Consola.ttf", 24);  // 替换为你的字体路径
     if (font == nullptr) {
         std::cerr << "Failed to load font! SDL_ttf Error: " << TTF_GetError() << std::endl;
+        return -1;
+    }
+
+    // 加载音效
+    Mix_Chunk* brickHitSound = Mix_LoadWAV("./Content/hit.wav");
+    Mix_Chunk* ballMissedSound = Mix_LoadWAV("./Content/life.wav");
+    Mix_Chunk* winSound = Mix_LoadWAV("./Content/win.wav");
+    Mix_Chunk* gameOverSound = Mix_LoadWAV("./Content/gameOver.wav");
+
+    if (!brickHitSound || !ballMissedSound || !winSound || !gameOverSound) {
+        std::cerr << "Failed to load sound effects! SDL_mixer Error: " << Mix_GetError() << std::endl;
         return -1;
     }
 
@@ -144,7 +174,6 @@ int main(int argc, char* argv[]) {
         // 球与挡板的碰撞
         if (SDL_HasIntersection(&ball, &paddle)) {
             ballVelY = -ballVelY;
-            ball.y = paddle.y - BALL_SIZE; // 防止粘连
         }
 
         // 球与砖块的碰撞
@@ -153,12 +182,14 @@ int main(int argc, char* argv[]) {
                 brick.isDestroyed = true;
                 ballVelY = -ballVelY;
                 score += 10; // 每个砖块得分
+                Mix_PlayChannel(-1, brickHitSound, 0); // 播放砖块碰撞音效
                 break;
             }
         }
 
         // 检查是否所有砖块都被摧毁
         if (allBricksDestroyed(bricks)) {
+            Mix_PlayChannel(-1, winSound, 0); // 播放胜利音效
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色背景
             SDL_RenderClear(renderer);
             renderText(renderer, font, "You Win! Press Enter for Next Level", SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
@@ -183,8 +214,10 @@ int main(int argc, char* argv[]) {
         // 球落出屏幕
         if (ball.y > SCREEN_HEIGHT) {
             lives--; // 减少生命值
+            Mix_PlayChannel(-1, ballMissedSound, 0); // 播放球掉落音效
             if (lives <= 0) {
                 // 游戏结束逻辑
+                Mix_PlayChannel(-1, gameOverSound, 0); // 播放游戏失败音效
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色背景
                 SDL_RenderClear(renderer);
                 renderText(renderer, font, "Game Over! Your score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 30);
@@ -243,6 +276,11 @@ int main(int argc, char* argv[]) {
     }
 
     // 清理
+    Mix_FreeChunk(brickHitSound);
+    Mix_FreeChunk(ballMissedSound);
+    Mix_FreeChunk(winSound);
+    Mix_FreeChunk(gameOverSound);
+    Mix_Quit();  // 退出 SDL_mixer
     TTF_CloseFont(font);  // 关闭字体
     TTF_Quit();  // 退出 SDL_ttf
     SDL_DestroyRenderer(renderer);
