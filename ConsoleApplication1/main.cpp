@@ -4,18 +4,19 @@
 #include <iostream>
 #include <string>
 
-const int SCREEN_WIDTH = 800;  // 屏幕宽度
-const int SCREEN_HEIGHT = 600;  // 屏幕高度
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
 
-const int BRICK_ROWS = 5;  // 砖块行数
-const int BRICK_COLS = 10;  // 砖块列数
-const int BRICK_WIDTH = 70;  // 砖块宽度
-const int BRICK_HEIGHT = 20;  // 砖块高度
+const int BRICK_ROWS = 8;       // 增加砖块行数
+const int BRICK_COLS = 12;      // 增加砖块列数
+const int BRICK_WIDTH = 60;     // 缩小砖块宽度
+const int BRICK_HEIGHT = 15;    // 缩小砖块高度
 
-const int PADDLE_WIDTH = 100;  // 挡板宽度
-const int PADDLE_HEIGHT = 10;  // 挡板高度
+const int PADDLE_WIDTH = 80;    // 缩短挡板宽度
+const int PADDLE_HEIGHT = 10;
 
-const int BALL_SIZE = 10;  // 球的大小
+const int BALL_SIZE = 10;       // 保持球的大小不变
+
 
 // 砖块结构体
 struct Brick {
@@ -41,6 +42,16 @@ void resetBall(SDL_Rect& ball, int& ballVelX, int& ballVelY) {
     ballVelY = -5;
 }
 
+// 重置游戏状态
+void resetGame(std::vector<Brick>& bricks, SDL_Rect& ball, SDL_Rect& paddle, int& ballVelX, int& ballVelY, int& score, int& lives) {
+    bricks.clear();
+    createBricks(bricks); // 重新生成砖块
+    resetBall(ball, ballVelX, ballVelY); // 重置球的位置和速度
+    paddle.x = SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2; // 重置挡板位置
+    score = 0; // 重置分数
+    lives = 3; // 重置生命值
+}
+
 // 渲染文本
 void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y) {
     SDL_Color textColor = { 255, 255, 255 };
@@ -64,6 +75,15 @@ void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text,
     SDL_DestroyTexture(textTexture);  // 每次渲染后释放纹理
 }
 
+// 检查所有砖块是否摧毁完
+bool allBricksDestroyed(const std::vector<Brick>& bricks) {
+    for (const auto& brick : bricks) {
+        if (!brick.isDestroyed) {
+            return false;  // 仍有未摧毁的砖块
+        }
+    }
+    return true;  // 所有砖块都摧毁了
+}
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
@@ -137,11 +157,55 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // 检查是否所有砖块都被摧毁
+        if (allBricksDestroyed(bricks)) {
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色背景
+            SDL_RenderClear(renderer);
+            renderText(renderer, font, "You Win! Press Enter for Next Level", SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
+            SDL_RenderPresent(renderer);
+
+            bool waiting = true;
+            while (waiting) {
+                while (SDL_PollEvent(&event)) {
+                    if (event.type == SDL_QUIT) {
+                        running = false;
+                        waiting = false;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN) {
+                        // 重新开始关卡
+                        resetGame(bricks, ball, paddle, ballVelX, ballVelY, score, lives);
+                        waiting = false;
+                    }
+                }
+            }
+        }
+
         // 球落出屏幕
         if (ball.y > SCREEN_HEIGHT) {
             lives--; // 减少生命值
             if (lives <= 0) {
-                running = false; // 生命值耗尽，游戏结束
+                // 游戏结束逻辑
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色背景
+                SDL_RenderClear(renderer);
+                renderText(renderer, font, "Game Over! Your score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 30);
+                renderText(renderer, font, "Press ENTER to restart", SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 + 10);
+                SDL_RenderPresent(renderer);
+
+                // 等待玩家按下回车键
+                bool waiting = true;
+                while (waiting) {
+                    while (SDL_PollEvent(&event)) {
+                        if (event.type == SDL_QUIT) {
+                            running = false;
+                            waiting = false;
+                        }
+                        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_RETURN) {
+                            resetGame(bricks, ball, paddle, ballVelX, ballVelY, score, lives);
+                            waiting = false;
+                        }
+                    }
+                    SDL_Delay(10);
+                }
             }
             else {
                 resetBall(ball, ballVelX, ballVelY); // 重置球的位置和速度
@@ -174,18 +238,9 @@ int main(int argc, char* argv[]) {
         // 刷新渲染
         SDL_RenderPresent(renderer);
 
-
         // 添加延迟以控制帧率
         SDL_Delay(10); // 约60 FPS
     }
-
-    // 游戏结束，显示最终得分
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色背景
-    SDL_RenderClear(renderer);
-    renderText(renderer, font, "Game Over! Your score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2);
-    SDL_RenderPresent(renderer);
-    SDL_Delay(3000); // 显示3秒
-
 
     // 清理
     TTF_CloseFont(font);  // 关闭字体
